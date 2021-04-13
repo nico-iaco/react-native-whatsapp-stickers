@@ -8,6 +8,7 @@
 
 package com.jobeso.RNWhatsAppStickers;
 
+import android.net.Uri;
 import android.os.Parcel;
 import android.os.Parcelable;
 
@@ -16,18 +17,26 @@ import java.util.List;
 class Sticker implements Parcelable {
     String imageFileName;
     List<String> emojis;
+    Uri uri;
     long size;
 
-    Sticker(String imageFileName, List<String> emojis) {
+    public Sticker(String imageFileName, List<String> emojis) {
         this.imageFileName = imageFileName;
         this.emojis = emojis;
     }
 
-    protected Sticker(Parcel in) {
+    public Sticker(String imageFileName, Uri uri, List<String> emojis) {
+        this.imageFileName = imageFileName;
+        this.emojis = emojis;
+        this.uri = uri;
+    }
+
+    public Sticker(Parcel in) {
         imageFileName = in.readString();
         emojis = in.createStringArrayList();
         size = in.readLong();
     }
+
 
     public static final Creator<Sticker> CREATOR = new Creator<Sticker>() {
         @Override
@@ -55,5 +64,13 @@ class Sticker implements Parcelable {
         dest.writeString(imageFileName);
         dest.writeStringList(emojis);
         dest.writeLong(size);
+    }
+
+    public Uri getUri() {
+        return uri;
+    }
+
+    public String getImageFileName() {
+        return imageFileName;
     }
 }

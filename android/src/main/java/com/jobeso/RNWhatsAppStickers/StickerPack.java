@@ -7,12 +7,18 @@
  */
 package com.jobeso.RNWhatsAppStickers;
 
+import android.content.Context;
+import android.net.Uri;
 import android.os.Parcel;
 import android.os.Parcelable;
 
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 class StickerPack implements Parcelable {
+    Uri trayImageUri;
     String identifier;
     String name;
     String publisher;
@@ -27,16 +33,32 @@ class StickerPack implements Parcelable {
     private long totalSize;
     String androidPlayStoreLink;
     private boolean isWhitelisted;
+    private int stickersAddedIndex = 0;
 
-    StickerPack(String identifier, String name, String publisher, String trayImageFile, String publisherEmail, String publisherWebsite, String privacyPolicyWebsite, String licenseAgreementWebsite) {
+    /*public StickerPack(String identifier, String name, String publisher, String trayImageFile, String publisherEmail, String publisherWebsite, String privacyPolicyWebsite, String licenseAgreementWebsite) {
         this.identifier = identifier;
         this.name = name;
         this.publisher = publisher;
         this.trayImageFile = trayImageFile;
+        this.trayImageUri = Uri.parse("");
         this.publisherEmail = publisherEmail;
         this.publisherWebsite = publisherWebsite;
         this.privacyPolicyWebsite = privacyPolicyWebsite;
         this.licenseAgreementWebsite = licenseAgreementWebsite;
+        this.stickers = new ArrayList<>();
+    }*/
+
+    public StickerPack(String identifier, String name, String publisher, Uri trayImageUri, String publisherEmail, String publisherWebsite, String privacyPolicyWebsite, String licenseAgreementWebsite, Context context) {
+        this.identifier = identifier;
+        this.name = name;
+        this.publisher = publisher;
+        this.trayImageFile = "trayimage";
+        this.trayImageUri = ImageManipulation.convertIconTrayToWebP(trayImageUri, this.identifier, "trayImage", context);
+        this.publisherEmail = publisherEmail;
+        this.publisherWebsite = publisherWebsite;
+        this.privacyPolicyWebsite = privacyPolicyWebsite;
+        this.licenseAgreementWebsite = licenseAgreementWebsite;
+        this.stickers = new ArrayList<>();
     }
 
     void setIsWhitelisted(boolean isWhitelisted) {
@@ -75,12 +97,31 @@ class StickerPack implements Parcelable {
         }
     };
 
-    void setStickers(List<Sticker> stickers) {
-        this.stickers = stickers;
-        totalSize = 0;
-        for (Sticker sticker : stickers) {
-            totalSize += sticker.size;
+    public void addSticker(Uri uri, Context context){
+        String index = String.valueOf(stickersAddedIndex);
+        this.stickers.add(new Sticker(
+                index,
+                ImageManipulation.convertImageToWebP(uri, this.identifier, index, context),
+                new ArrayList<String>()));
+        stickersAddedIndex++;
+    }
+
+    public void deleteSticker(Sticker sticker){
+        new File(sticker.getUri().getPath()).delete();
+        this.stickers.remove(sticker);
+    }
+
+    public Sticker getSticker(int index){
+        return this.stickers.get(index);
+    }
+
+    public Sticker getStickerById(int index){
+        for(Sticker s : this.stickers){
+            if(s.getImageFileName().equals(String.valueOf(index))){
+                return s;
+            }
         }
+        return null;
     }
 
     public void setAndroidPlayStoreLink(String androidPlayStoreLink) {
@@ -119,5 +160,25 @@ class StickerPack implements Parcelable {
         dest.writeLong(totalSize);
         dest.writeString(androidPlayStoreLink);
         dest.writeByte((byte) (isWhitelisted ? 1 : 0));
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public String getIdentifier() {
+        return this.identifier;
+    }
+
+    public void setIdentifier(String identifier) {
+        this.identifier = identifier;
+    }
+
+    public Uri getTrayImageUri() {
+        return trayImageUri;
     }
 }

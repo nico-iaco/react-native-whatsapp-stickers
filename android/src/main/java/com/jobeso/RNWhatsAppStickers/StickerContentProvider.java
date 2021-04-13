@@ -18,11 +18,14 @@ import android.content.res.AssetManager;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.net.Uri;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
+import android.os.ParcelFileDescriptor;
 import android.text.TextUtils;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -48,9 +51,10 @@ public class StickerContentProvider extends ContentProvider {
 
     public static final String STICKER_FILE_NAME_IN_QUERY = "sticker_file_name";
     public static final String STICKER_FILE_EMOJI_IN_QUERY = "sticker_emoji";
-    public static final String CONTENT_FILE_NAME = "contents.json";
 
-    // public static Uri AUTHORITY_URI = new Uri.Builder().scheme(ContentResolver.SCHEME_CONTENT).authority(RNWhatsAppStickersModule.getContentProviderAuthority()).appendPath(StickerContentProvider.METADATA).build();
+
+    public static final String CONTENT_SCHEME = "content";
+    //public static Uri AUTHORITY_URI = new Uri.Builder().scheme(StickerContentProvider.CONTENT_SCHEME).authority(RNWhatsAppStickersModule.getContentProviderAuthority()).appendPath(StickerContentProvider.METADATA).build();
 
     /**
      * Do not change the values in the UriMatcher because otherwise, WhatsApp will not be able to fetch the stickers from the ContentProvider.
@@ -101,6 +105,10 @@ public class StickerContentProvider extends ContentProvider {
     public Cursor query(@NonNull Uri uri, @Nullable String[] projection, String selection,
                         String[] selectionArgs, String sortOrder) {
         final int code = MATCHER.match(uri);
+        Log.w("BASIC Query URI", String.valueOf(uri));
+        if(StickerBook.getAllStickerPacks().isEmpty()){
+            StickerBook.init(getContext());
+        }
         if (code == METADATA_CODE) {
             return getPackForAllStickerPacks(uri);
         } else if (code == METADATA_CODE_FOR_SINGLE_PACK) {
@@ -116,12 +124,50 @@ public class StickerContentProvider extends ContentProvider {
     @Override
     public AssetFileDescriptor openAssetFile(@NonNull Uri uri, @NonNull String mode) {
         final int matchCode = MATCHER.match(uri);
-        if (matchCode == STICKERS_ASSET_CODE || matchCode == STICKER_PACK_TRAY_ICON_CODE) {
+        Log.w("ASSETFILE QUERY URI", String.valueOf(uri) + "");
+        Log.w("ASSETFILE QUERY PATH", uri.getPath() + "");
+        final List<String> pathSegments = uri.getPathSegments();
+        StickerPack csp = StickerBook.getStickerPackByIdWithContext(pathSegments.get(pathSegments.size() - 2), getContext());
+        if(csp!=null){
+            String filename = pathSegments.get(pathSegments.size() - 1);
+
+
+            ParcelFileDescriptor pfd = null;
+            try {
+                if(filename.equals("trayimage") && csp.getTrayImageUri()!=null){
+                    pfd = Objects.requireNonNull(getContext()).getContentResolver().openFileDescriptor(
+                            csp.getTrayImageUri(), "r");
+                    Log.w("ASSETFILE ACTUAL URI", csp.getTrayImageUri() + "");
+
+                } else {
+                    try {
+                        pfd = Objects.requireNonNull(getContext()).getContentResolver().openFileDescriptor(
+                                csp.getStickerById(Integer.parseInt(filename)).getUri(), "r");
+                        Log.w("ASSETFILE ACTUAL URI", csp.getStickerById(Integer.parseInt(filename)).getUri() + "");
+                    } catch (NullPointerException e){
+                        Log.e("StickerMaker", "WhatsApp tried to access a non existent sticker, id: " + filename);
+                    }
+                }
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+            return new AssetFileDescriptor(pfd, 0, AssetFileDescriptor.UNKNOWN_LENGTH);
+        }
+        return getImageAsset(uri);
+        /*if (matchCode == STICKERS_ASSET_CODE || matchCode == STICKER_PACK_TRAY_ICON_CODE) {
             return getImageAsset(uri);
         }
-        return null;
+        return null;*/
     }
 
+    @Nullable
+    @Override
+    public ParcelFileDescriptor openFile(@NonNull Uri uri, @NonNull String mode) throws FileNotFoundException {
+        Log.w("TESTING THIS", "IS IT OPENING FILE REGULARLY?");
+        return super.openFile(uri, mode);
+    }
 
     @Override
     public String getType(@NonNull Uri uri) {
@@ -142,20 +188,14 @@ public class StickerContentProvider extends ContentProvider {
         }
     }
 
-    private synchronized void readContentFile(@NonNull Context context) {
-        try (InputStream contentsInputStream = context.getAssets().open(CONTENT_FILE_NAME)) {
-            stickerPackList = ContentFileParser.parseStickerPacks(contentsInputStream);
-        } catch (IOException | IllegalStateException e) {
-            throw new RuntimeException(CONTENT_FILE_NAME + " file has some issues: " + e.getMessage(), e);
-        }
-    }
-
     public List<StickerPack> getStickerPackList() {
-        if (stickerPackList == null) {
-            readContentFile(Objects.requireNonNull(getContext()));
-        }
+        /*if (stickerPackList == null) {
+            readContentFile();
+        }*/
+        stickerPackList = StickerBook.getAllStickerPacks();
         return stickerPackList;
     }
+
 
     private Cursor getPackForAllStickerPacks(@NonNull Uri uri) {
         return getStickerPackInfo(uri, getStickerPackList());
@@ -220,6 +260,7 @@ public class StickerContentProvider extends ContentProvider {
     }
 
     private AssetFileDescriptor getImageAsset(Uri uri) throws IllegalArgumentException {
+        Log.w("IMAGE ASSET", "ASKING FOR ASSET?");
         AssetManager am = Objects.requireNonNull(getContext()).getAssets();
         final List<String> pathSegments = uri.getPathSegments();
         if (pathSegments.size() != 3) {
